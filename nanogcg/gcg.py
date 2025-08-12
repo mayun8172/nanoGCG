@@ -516,10 +516,19 @@ class GCG:
                 current_batch_size = input_embeds_batch.shape[0]
 
                 if self.prefix_cache:
-                    if not prefix_cache_batch or current_batch_size != search_batch_size:
-                        prefix_cache_batch = [[x.expand(current_batch_size, -1, -1, -1) for x in self.prefix_cache[i]] for i in range(len(self.prefix_cache))]
+                    # Expand prefix cache to match batch size
+                    key_cache = self.prefix_cache.key_cache
+                    value_cache = self.prefix_cache.value_cache
+                    current_batch_size = input_embeds_batch.shape[0]
 
-                    outputs = self.model(inputs_embeds=input_embeds_batch, past_key_values=prefix_cache_batch, use_cache=True)
+                    for i in range(len(self.prefix_cache)):
+                        key_cache[i] = key_cache[i].expand(current_batch_size, -1, -1, -1)
+                        value_cache[i] = value_cache[i].expand(current_batch_size, -1, -1, -1)
+
+                    self.prefix_cache.key_cache = key_cache
+                    self.prefix_cache.value_cache = value_cache
+                    self.prefix_cache._seen_tokens += key_cache[0].shape[-2]
+                    outputs = self.model(inputs_embeds=input_embeds_batch, past_key_values=self.prefix_cache, use_cache=True)
                 else:
                     outputs = self.model(inputs_embeds=input_embeds_batch)
 
